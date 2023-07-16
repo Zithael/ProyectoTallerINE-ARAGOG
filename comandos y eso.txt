@@ -1,0 +1,99 @@
+#include <NewPing.h>
+#include <udriver_pca9685_fing.h> // Para poder usar la libreria.
+using namespace UDriver_PCA9685; 
+#include <Adafruit_Microbit.h>  //blutuch
+Adafruit_Microbit microbit;
+
+
+///Servos
+const I2CAddress ADDR = 0x6A;
+PCA9685ServoController servo_ctrl(ADDR); // crea una variable asociada al controlador llamada “servo_ctrl”
+
+const pin_t PIN_SERVO1 = SV1; // Pin del servomotor (cable naranja)
+const pin_t PIN_SERVO2 = SV2;
+const pin_t PIN_SERVO3 = SV3;
+const pin_t PIN_SERVO4 = SV4;
+const pin_t PIN_SERVO5 = SV5;
+const pin_t PIN_SERVO6 = SV6;
+const pin_t PIN_SERVO7 = SV7;
+const pin_t PIN_SERVO8 = SV8;
+const pin_t PIN_SERVO9 = SV9;
+const pin_t PIN_SERVO15 = SV15;  // Pin del servomotor que controla el movimiento de la cabeza
+//const int d15 = 42;
+//const int d60 = 166;
+//const int d30 = 83;
+
+const int d15 = 100;
+const int d60 = 100;
+const int d30 = 100;
+
+char comando = 'd';
+int n;
+int ep1 = 0;
+int ep2 = 0; // angulo inicial del piñon del servo, el epsilon del muslo es -6 
+int ep3 = 0;// angulo inicial del piñon del servo, el epsilon de la pierna es +5 
+int ep4 = 0;
+int ep5 = 0; // angulo inicial del piñon del servo, el epsilon del muslo marcado es -7
+int ep6 = 0;
+int ep7 = 0;// angulo inicial del piñon del servo, el epsilon de la pierna marcada es +3 y de la otra -3
+int ep8 = 0;
+
+int a1 = 30;
+int a2 = 120;
+int a3 = 150;
+int a4 = 60;
+int a5 = 30;
+int a6 = 120;
+int a7 = 150;
+int a8 = 60;
+
+const int movp = 25;
+const int movm = 30;
+const int rot = 25;
+
+
+
+void setup() {
+ Serial.begin(9600);
+ Serial.println("Microbit ready!");
+ microbit.BTLESerial.setLocalName("Aragog"); //Microbit es el nombre de la conexión
+ microbit.BTLESerial.begin();
+ Serial.begin(9600);
+ servo_ctrl.begin();
+ servo_ctrl.move_servo(PIN_SERVO15, 75);
+}
+
+void loop() {
+  microbit.BTLESerial.poll(); //Permite escribir en el celular
+  
+  if (microbit.BTLESerial.available()) {
+    comando = microbit.BTLESerial.read();
+    
+  }
+  Serial.println(comando);
+  switch (comando){       // ejecuta segun el comando leido
+    case 'a':   
+                Avanzar_v2();
+          break;
+    case 'b':   Retroceder();
+          break;
+    case 'c':   Saludar();       
+          break;
+    case 'd':   ini_patas();
+          break;
+    case 'e':   RotacionH();
+          break;
+    case 'f':   RotacionA();
+          break;
+    case 'k':   Uykieto();
+          break;
+    case 'p':   Enojao();
+          break;
+    case 's':   Bailecito();
+          break;
+    case 't':   autopilot();
+          break;
+    default:    Estirar();  
+    }
+  delay(60);
+}

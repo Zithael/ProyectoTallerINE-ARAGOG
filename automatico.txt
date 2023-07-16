@@ -1,0 +1,194 @@
+/*
+ *Libreria para manejo de servos
+ */
+
+/*
+ *Libreria para manejo de sensor de ultrasonido
+ */
+#include <NewPing.h>
+/*
+ *Libreria para comunicación microbit BLE y matriz LEDs
+ */
+
+
+
+//SENSOR ULTRASONIDO
+
+#define TRIGGER_PIN 1
+#define ECHO_PIN 0
+#define MAX_DIST 30
+#define UMBRAL_OBST 25  // Una distancia menor a esta indica que hay un obstaculo.
+
+NewPing Sonar(TRIGGER_PIN, ECHO_PIN, MAX_DIST);
+
+
+int obstaculo = 0;
+/*
+*  Referencia obstaculo
+* Tres posiciónes, 
+*         0: no hay obstaculo
+*         1: hay obstáculo 
+* 0 - 000   Sin obstaculos
+* 1 - 001   
+* 2 - 010   
+* 3 - 011  
+* 4 - 100 
+* 5 - 101
+* 6 - 110
+* 7 - 111   Hay obstaculos en las 3 posiciones.
+*
+*/
+int estado_cabeza = 0;
+int obstaculo_mask_der = 1;  // 001 en binario
+int obstaculo_mask_izq = 4;  // 100 en binario
+int obstaculo_mask_fre = 2;  // 010 en binario
+
+//Función que realiza los movimientos automáticos en función de los obstáculos que se encuentren
+// a su alrededor
+// Cada vez que ser realiza un movimiento, se ejecuta la función "retardo(t)" lo que garantiza
+//que se va modificando la variable "obstáculo".
+void autopilot(void) {
+  switch (obstaculo) {
+    case 0:  // No hay obstáculos
+      Avanzar_v2();
+      break;
+    case 1:  // Obstáculo solo a la derecha
+      RotacionA();
+      break;
+    case 2:  // Obstáculo al centro
+      RotacionA();
+      break;
+    case 3:  // Obstáculo al centro y a la derecha
+      RotacionA();
+      break;
+    case 4:  // Obstáculo a la izquierda
+      RotacionH();
+      break;
+    case 5:  // Obstáculo a la izquierda y a la derecha. No hay obstáculo adelante.
+      RotacionH();
+      break;
+    case 6:  // Obstáculo al centro y a la izquierda
+      RotacionH();
+      break;
+    case 7:  // Obstáculo al centro, a la izquierda y a la derecha
+      RotacionH();
+      break;
+  }
+}
+
+void retardo(int t) {
+  const unsigned long dt_servo_cabeza = 60;
+  unsigned long t_actual = millis();
+  unsigned long t_final = t_actual + t;
+  static unsigned long t_final_cabeza = 0;  // para que la primera vez entre al "if".
+  // variable que almacena la distancia al obstáculo, un valor de MAX_DIST significa que no hay obstáculo
+  static int medida = MAX_DIST;
+  //contador para realizar 10 medidas y evitar errores
+  static int contador_medidas = 0;
+
+
+  while (t_actual < t_final) {
+    //Acción a realizar mientras estoy esperando el retardo
+    // espero a que la cabeza se mueva, la primera vez que entro se cumple
+    if (t_actual > t_final_cabeza) { 
+      //Se termino de mover la cabeza empiezo a medir
+      //Voy a detectar obstaculo, para eso realizo 10 medidas y me quedo con la menor
+      //Se descarta si la medida es 0, para evitar errores.
+      //Una medida a una distancia maxima de MAX_DIST significa que no hay obstaculos
+      //El tiempo máximo de tomar una medida es 1ms, despereciable.
+      int medida_aux = Sonar.ping_cm();
+      if (medida_aux > 0 && medida_aux < medida) {
+        medida = medida_aux;
+      }
+      contador_medidas++;
+      //Evaluo si ya pasaron las 10 medidas
+      if (contador_medidas >= 10) {
+        // si la menor fue menor que umbra_obst hay obstáculo
+        //caso contrario no.
+        if (medida < UMBRAL_OBST) {
+          set_obstaculo(1);
+        } else {
+          set_obstaculo(0);
+        }
+        // Me preparo para la próxima medida, restaurando variables y moviendo la cabeza
+        medida = MAX_DIST;
+        contador_medidas = 0;
+        actualizar_estado_cabeza();
+        //supongo que el movimiento de la cabeza es de 60ms
+        t_final_cabeza = millis() + dt_servo_cabeza;
+      }
+    }
+    t_actual = millis();
+  }
+}
+
+void set_obstaculo(int i) {
+  // Agrega o quita el obstaculo en la posición en que esta la cabeza.
+  switch (estado_cabeza) {
+    case 0:
+      //estoy mirando hacia la izquierda
+      if (i)  //Si hay obstráculo, lo agrega, en caso contrario, lo quita.
+        obstaculo |= obstaculo_mask_izq; //pone un 1 en el lugar correspondiente a obstaculo izquierdo (1XX), los demás los deja igual
+      else
+        obstaculo &= ~obstaculo_mask_izq; //pone un 0 en el lugar correspondiente a obstaculo izquierdo (0XX), los demás los deja igual
+      break;
+    case 1:
+      //estoy mirando hacia el centro
+      if (i)
+        obstaculo |= obstaculo_mask_fre; //pone un 1 en el lugar correspondiente a obstaculo central (X1X), los demás los deja igual
+      else
+        obstaculo &= ~obstaculo_mask_fre; //pone un 0 en el lugar correspondiente a obstaculo central (X0X), los demás los deja igual
+      break;
+    //estoy mirando hacia la derecha
+    case 2:
+      if (i)
+        obstaculo |= obstaculo_mask_der; //pone un 1 en el lugar correspondiente a obstaculo derecho (XX1), los demás los deja igual
+      else
+        obstaculo &= ~obstaculo_mask_der; //pone un 0 en el lugar correspondiente a obstaculo derecho (XX0), los demás los deja igual
+      break;
+    //estoy mirando hacia el centro
+    case 3:
+      if (i)
+        obstaculo |= obstaculo_mask_fre; //pone un 1 en el lugar correspondiente a obstaculo central (X1X), los demás los deja igual
+      else
+        obstaculo &= ~obstaculo_mask_fre; //pone un 0 en el lugar correspondiente a obstaculo central (X0X), los demás los deja igual
+      break;
+  }
+}
+
+void actualizar_estado_cabeza(void) {
+  // Es igual que el movimiento de la hamaca vista en el curso.
+  switch (estado_cabeza) {  //Actualiza estado_cabeza
+    case 0:
+      estado_cabeza = 1;
+      break;
+    case 1:
+      estado_cabeza = 2;
+      break;
+    case 2:
+      estado_cabeza = 3;
+      break;
+    case 3:
+      estado_cabeza = 0;
+      break;
+  }
+
+  switch (estado_cabeza) {  //Actualiza posición de la cabeza
+    case 0:
+      //miro hacia izquierda
+      servo_ctrl.move_servo(PIN_SERVO15, 75);
+      break;
+    case 1:
+      //miro hacia el centro
+      servo_ctrl.move_servo(PIN_SERVO15, 90);
+      break;
+    case 2:
+      //miro hacia la derecha
+      servo_ctrl.move_servo(PIN_SERVO15, 115);
+      break;
+    case 3:
+      //miro hacia el centro
+      servo_ctrl.move_servo(PIN_SERVO15, 90);
+      break;
+  }
+}
